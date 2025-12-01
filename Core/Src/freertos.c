@@ -52,6 +52,12 @@ const osThreadAttr_t ledTask_attributes = {
 	.stack_size = 128*4
 };
 
+osThreadId_t printTaskHandle;                 // 打印任务
+const osThreadAttr_t printTask_attributes = {
+	.name = "printTask",
+	.priority = (osPriority_t) osPriorityNormal,
+	.stack_size = 128 * 4
+};
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -59,6 +65,8 @@ const osThreadAttr_t ledTask_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 void StartLedTask(void *argument);              //声明LED任务
+void StartPrintTask(void *argument);            //声明print任务
+
 
 /* USER CODE END FunctionPrototypes */
 
@@ -98,6 +106,8 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
 	ledTaskHandle = osThreadNew(StartLedTask, NULL, &ledTask_attributes);
+	printTaskHandle = osThreadNew(StartPrintTask, NULL, &printTask_attributes);
+	
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
@@ -134,7 +144,18 @@ void StartLedTask(void *argument)              //LED Task的实现
 	}
 }
 
-
+void StartPrintTask(void *argument)
+{
+	uint32_t heartbeat = 0;
+	
+	for(;;)
+	{
+		uart_printf("[PRINT] heartbeat=%lu, tick=%lu\r\n",
+									heartbeat++, HAL_GetTick());
+		
+		vTaskDelay(pdMS_TO_TICKS(1000));        		//延时1s
+	}
+}
 	
 
 /* USER CODE END Application */
