@@ -1,4 +1,4 @@
-#include "dht11.h"
+#include "bsp_dht11.h"
 
 /* 内部使用的状态枚举 */
 typedef enum
@@ -16,7 +16,6 @@ typedef struct
     uint8_t temp_dec;
 } DHT11_Frame_t;
 
-#include "dht11.h"
 
 /* --------- GPIO 输入/输出封装 --------- */
 

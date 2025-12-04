@@ -28,7 +28,7 @@
 #include "usart.h"
 #include <string.h>
 #include "bsp_uart.h"
-#include "dht11.h"
+#include "bsp_dht11.h"
 #include <stdio.h>
 
 /* USER CODE END Includes */
@@ -282,29 +282,43 @@ void StartCmdTask(void *argument)
 
 void StartSensorTask(void *argument)
 {
-	(void)argument;
-	uint8_t humi = 0;
-	uint8_t temp = 0;
-	HAL_StatusTypeDef res;
-	
-	osDelay(2000);   //让系统和DHT11稳定
-	
-	for(;;)
-	{
-		res = DHT11_Read(&humi, &temp);
+//	(void)argument;
+//	uint8_t humi = 0;
+//	uint8_t temp = 0;
+//	HAL_StatusTypeDef res;
+//	
+//	osDelay(2000);   //让系统和DHT11稳定
+//	
+//	for(;;)
+//	{
+//		res = DHT11_Read(&humi, &temp);
+//		
+//		if(res == HAL_OK)
+//		{
+//			uart_printf("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
+//		}
+//		else
+//		{
+//			uart_printf("DHT11 ERROR:read failed\r\n");
+//		}
+//		
+//		/* 遵守 DHT11 最小采样周期（>=1s），这里我们用 2s */
+//		osDelay(2000);
+//	}
 		
-		if(res == HAL_OK)
-		{
-			uart_printf("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
-		}
-		else
-		{
-			uart_printf("DHT11 ERROR:read failed\r\n");
-		}
-		
-		/* 遵守 DHT11 最小采样周期（>=1s），这里我们用 2s */
-		osDelay(2000);
-	}
+		/*	模拟数据实现		*/
+		 (void)argument;
+    uint8_t humi = 60;   // 模拟湿度值
+    uint8_t temp = 25;   // 模拟温度值
+
+    for (;;)
+    {
+        // 模拟输出温湿度数据
+        uart_printf("DHT11 OK: T=%d C, H=%d %%\r\n", temp, humi);
+
+        // 延时 2s，模拟传感器的读取周期
+        osDelay(2000);
+    }
 }
 
 
