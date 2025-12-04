@@ -28,6 +28,9 @@
 #include "usart.h"
 #include <string.h>
 #include "bsp_uart.h"
+#include "dht11.h"
+#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,6 +75,13 @@ const osThreadAttr_t cmdTask_attributes = {
 	.stack_size = 256 * 4
 };
 
+osThreadId_t sensorTaskHandle;                    // 传感器任务
+const osThreadAttr_t sensorTask_attributes = {
+  .name = "sensorTask",
+	.priority = (osPriority_t) osPriorityNormal,
+	.stack_size = 256 * 4
+};
+
 /*	新增队列句柄		*/
 osMessageQueueId_t queueHandle;							 //心跳队列			
 osMessageQueueId_t queueCmdHandle;           //命令队列
@@ -84,6 +94,7 @@ osMessageQueueId_t queueCmdHandle;           //命令队列
 void StartLedTask(void *argument);              //声明LED任务
 void StartPrintTask(void *argument);            //声明print任务
 void StartCmdTask(void *argument);              //命令任务原型
+void StartSensorTask(void *argument);            //传感器任务
 
 /* USER CODE END FunctionPrototypes */
 
@@ -127,6 +138,8 @@ void MX_FREERTOS_Init(void) {
 	ledTaskHandle = osThreadNew(StartLedTask, NULL, &ledTask_attributes);
 	printTaskHandle = osThreadNew(StartPrintTask, NULL, &printTask_attributes);
 	cmdTaskHandle = osThreadNew(StartCmdTask, NULL, &cmdTask_attributes);
+	sensorTaskHandle = osThreadNew(StartSensorTask, NULL, &sensorTask_attributes);
+	
 	
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -267,6 +280,32 @@ void StartCmdTask(void *argument)
     }
 }
 
+void StartSensorTask(void *argument)
+{
+	(void)argument;
+	uint8_t humi = 0;
+	uint8_t temp = 0;
+	HAL_StatusTypeDef res;
+	
+	osDelay(2000);   //让系统和DHT11稳定
+	
+	for(;;)
+	{
+		res = DHT11_Read(&humi, &temp);
+		
+		if(res == HAL_OK)
+		{
+			uart_printf("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
+		}
+		else
+		{
+			uart_printf("DHT11 ERROR:read failed\r\n");
+		}
+		
+		/* 遵守 DHT11 最小采样周期（>=1s），这里我们用 2s */
+		osDelay(2000);
+	}
+}
 
 
 /* USER CODE END Application */
