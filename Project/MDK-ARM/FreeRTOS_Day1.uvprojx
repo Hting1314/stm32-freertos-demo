@@ -384,6 +384,28 @@
       <Groups>
         <Group>
           <GroupName>User/App</GroupName>
+          <Files>
+            <File>
+              <FileName>app_task_key.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\APP\app_task_key.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_task_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\APP\app_task_led.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_task_sensor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\APP\app_task_sensor.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_task_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\APP\app_task_uart.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>User/Bsp</GroupName>
@@ -397,6 +419,16 @@
               <FileName>bsp_uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Users\BSP\bsp_uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_key.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\BSP\bsp_key.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Users\BSP\bsp_led.c</FilePath>
             </File>
           </Files>
         </Group>

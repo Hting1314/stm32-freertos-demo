@@ -25,6 +25,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp_dht11.h"
+#include "bsp_led.h"
+#include "bsp_uart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -91,7 +93,9 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-	DHT11_Init();
+	BSP_LED_Init();
+	BSP_UART_Init();
+	BSP_DHT11_Init();
   /* USER CODE END 2 */
 
   /* Init scheduler */

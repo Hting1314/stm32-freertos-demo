@@ -20,26 +20,26 @@
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
 #include "task.h"
-#include "main.h"
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usart.h"
-#include <string.h>
-#include "bsp_uart.h"
-#include "bsp_dht11.h"
-#include <stdio.h>
+
+
+
+#include "main.h"
+#include "app_types.h"
+#include "app_task_led.h"
+#include "app_task_uart.h"
+#include "app_task_sensor.h"
+#include "app_task_key.h"
+
+
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef enum
-{
-	CMD_NONE = 0,
-	CMD_TOGGLE = 1,
-} CmdType;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -54,51 +54,108 @@ typedef enum
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-osThreadId_t ledTaskHandle;											//创建LED任务
-const osThreadAttr_t ledTask_attributes = {
-	.name = "ledTask",
-	.priority = (osPriority_t) osPriorityNormal,
-	.stack_size = 128*4
-};
-
-osThreadId_t printTaskHandle;                 // 打印任务
-const osThreadAttr_t printTask_attributes = {
-	.name = "printTask",
-	.priority = (osPriority_t) osPriorityNormal,
-	.stack_size = 128 * 4
-};
-
-osThreadId_t cmdTaskHandle;                     // 命令任务
-const osThreadAttr_t cmdTask_attributes = {
-	.name = "cmdTask",
-	.priority = (osPriority_t) osPriorityNormal,
-	.stack_size = 256 * 4
-};
-
-osThreadId_t sensorTaskHandle;                    // 传感器任务
-const osThreadAttr_t sensorTask_attributes = {
-  .name = "sensorTask",
-	.priority = (osPriority_t) osPriorityNormal,
-	.stack_size = 256 * 4
-};
-
-/*	新增队列句柄		*/
-osMessageQueueId_t queueHandle;							 //心跳队列			
-osMessageQueueId_t queueCmdHandle;           //命令队列
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 
+
+
+//任务句柄
+osThreadId_t defaultTaskHandle;
+osThreadId_t LedTaskHandle;
+osThreadId_t PrintTaskHandle;
+osThreadId_t CmdTaskHandle;
+osThreadId_t SensorTaskHandle;
+osThreadId_t KeyTaskHandle;
+
+
+
+//队列句柄
+osMessageQueueId_t queueHeartbeatHandle;
+osMessageQueueId_t queueCmdHandle;
+osMessageQueueId_t queueKeyHandle;
+
+
+
+/* 任务属性定义 -------------------------------------------------------------*/
+/* DefaultTask */
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+/* LedTask */
+const osThreadAttr_t LedTask_attributes = {
+  .name       = "LedTask",
+  .stack_size = 128 * 4,
+  .priority   = (osPriority_t) osPriorityNormal,
+};
+
+/* PrintTask */
+const osThreadAttr_t PrintTask_attributes = {
+  .name       = "PrintTask",
+  .stack_size = 128 * 4,
+  .priority   = (osPriority_t) osPriorityNormal,
+};
+
+/* CmdTask */
+const osThreadAttr_t CmdTask_attributes = {
+  .name       = "CmdTask",
+  .stack_size = 256 * 4,                      // 命令解析稍微给大一点栈
+  .priority   = (osPriority_t) osPriorityNormal,
+};
+
+/* SensorTask */
+const osThreadAttr_t SensorTask_attributes = {
+  .name       = "SensorTask",
+  .stack_size = 512 * 4,
+  .priority   = (osPriority_t) osPriorityBelowNormal,
+};
+
+/* KeyTask */
+const osThreadAttr_t KeyTask_attributes = {
+  .name       = "KeyTask",
+  .stack_size = 128 * 4,
+  .priority   = (osPriority_t) osPriorityNormal,
+};
+
+
+
+/* 队列属性定义 -------------------------------------------------------------*/
+/* 心跳队列：uint32_t，长度 8 */
+const osMessageQueueAttr_t queueHeartbeat_attributes = {
+  .name = "queueHeartbeat"
+};
+
+/* 命令队列：CmdType，长度 4 */
+const osMessageQueueAttr_t queueCmd_attributes = {
+  .name = "queueCmd"
+};
+
+/* 按键事件队列：uint8_t，长度 8 */
+const osMessageQueueAttr_t queueKey_attributes = {
+  .name = "queueKey"
+};
+
+
+
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-void StartLedTask(void *argument);              //声明LED任务
-void StartPrintTask(void *argument);            //声明print任务
-void StartCmdTask(void *argument);              //命令任务原型
-void StartSensorTask(void *argument);            //传感器任务
+
+
+
+void StartLedTask(void *argument);              
+void StartPrintTask(void *argument);            
+void StartCmdTask(void *argument);              
+void StartSensorTask(void *argument);           
+void StartKeyTask(void *argument);      
+
+
 
 /* USER CODE END FunctionPrototypes */
 
-//void StartDefaultTask(void *argument);
+void StartDefaultTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -126,8 +183,19 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-	queueHandle = osMessageQueueNew(5, sizeof(uint32_t), NULL);
-	queueCmdHandle = osMessageQueueNew(5, sizeof(CmdType), NULL);
+	
+	
+	
+ /* 心跳队列：供 PrintTask 发送 heartbeat，LedTask 消费 */
+  queueHeartbeatHandle = osMessageQueueNew(8, sizeof(uint32_t), &queueHeartbeat_attributes);
+
+  /* 命令队列：供 CmdTask 发送 CmdType，LedTask 消费 */
+  queueCmdHandle = osMessageQueueNew(4, sizeof(CmdType), &queueCmd_attributes);
+	
+	/*  按键事件队列：PF6 EXTI 回调 → KeyTask */
+  queueKeyHandle = osMessageQueueNew(8, sizeof(uint8_t), &queueKey_attributes);
+	
+	
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -135,10 +203,25 @@ void MX_FREERTOS_Init(void) {
 //  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-	ledTaskHandle = osThreadNew(StartLedTask, NULL, &ledTask_attributes);
-	printTaskHandle = osThreadNew(StartPrintTask, NULL, &printTask_attributes);
-	cmdTaskHandle = osThreadNew(StartCmdTask, NULL, &cmdTask_attributes);
-	sensorTaskHandle = osThreadNew(StartSensorTask, NULL, &sensorTask_attributes);
+
+
+
+ /* LED 任务：消费 queueHeartbeatHandle + queueCmdHandle */
+  LedTaskHandle = osThreadNew(StartLedTask, NULL, &LedTask_attributes);
+
+  /* Print 任务：定时发送 heartbeat 到 queueHeartbeatHandle */
+  PrintTaskHandle = osThreadNew(StartPrintTask, NULL, &PrintTask_attributes);
+
+  /* CMD 任务：阻塞读 UART，解析命令并发 CmdType 到 queueCmdHandle */
+  CmdTaskHandle = osThreadNew(StartCmdTask, NULL, &CmdTask_attributes);
+
+  /* Sensor 任务：周期性读取 DHT11，并通过串口打印 */
+  SensorTaskHandle = osThreadNew(StartSensorTask, NULL, &SensorTask_attributes);
+
+  /* Key 任务：从某个队列拿“模式变化” */
+  KeyTaskHandle = osThreadNew(StartTask_Key, NULL, &KeyTask_attributes);
+	
+
 	
 	
   /* add threads, ... */
@@ -157,169 +240,20 @@ void MX_FREERTOS_Init(void) {
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN StartDefaultTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartDefaultTask */
+}
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-void StartLedTask(void *argument)
-{
-    uint32_t recvValue = 0;
-    CmdType cmd;
-    uint8_t ledEnabled = 1;   // 1: 正常闪烁, 0: 关闭闪烁
 
-    for(;;)
-    {
-        /* 1) 先非阻塞检查是否有命令到达 */
-        if (osMessageQueueGet(queueCmdHandle, &cmd, NULL, 0) == osOK)
-        {
-            if (cmd == CMD_TOGGLE)
-            {
-                ledEnabled = !ledEnabled;
-                uart_printf("[LED] mode changed: %s\r\n",
-                            ledEnabled ? "ON" : "OFF");
-
-                if (!ledEnabled)
-                {
-                    /* 关闭模式时，确保灯灭 */
-                    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_13, GPIO_PIN_SET);
-                }
-            }
-        }
-
-        /* 2) 再从心跳队列里拿数据（带超时），用来驱动闪烁节奏 */
-        if (osMessageQueueGet(queueHandle, &recvValue, NULL,
-                              pdMS_TO_TICKS(100)) == osOK)
-        {
-            if (ledEnabled)
-            {
-                HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_13);
-                uart_printf("[LED] heartbeat=%lu (toggled)\r\n", recvValue);
-            }
-            else
-            {
-                uart_printf("[LED] heartbeat=%lu (ignored, mode OFF)\r\n",
-                            recvValue);
-            }
-        }
-
-        /* 如果 100ms 内没有收到心跳消息，也没关系，下一轮继续循环 */
-    }
-}
-
-void StartPrintTask(void *argument)
-{
-	uint32_t heartbeat = 0;
-	
-	for(;;)
-	{
-		uart_printf("[PRINT] heartbeat=%lu\r\n",heartbeat);
-		
-		/* ---向队列发送数据--- */
-		osMessageQueuePut(queueHandle, &heartbeat, 0 ,0 );
-		
-		heartbeat ++;
-		
-		vTaskDelay(pdMS_TO_TICKS(1000));        		//延时1s
-	}
-}
-
-void StartCmdTask(void *argument)
-{
-    uint8_t ch;
-    char buf[16];
-    uint8_t idx = 0;
-
-    memset(buf, 0, sizeof(buf));
-
-    uart_printf("[CMD] ready. Type 'toggle' + Enter.\r\n");
-
-    for(;;)
-    {
-        /* 阻塞读取 1 字节：HAL 会用到 SysTick/HAL Tick，但在 RTOS 下是可行的 */
-        if (HAL_UART_Receive(&huart1, &ch, 1, HAL_MAX_DELAY) == HAL_OK)
-        {
-            if (ch == '\r' || ch == '\n')
-            {
-                if (idx > 0)
-                {
-                    buf[idx] = '\0';   // 结束字符串
-
-                    uart_printf("[CMD] recv: %s\r\n", buf);
-
-                    if (strcmp(buf, "toggle") == 0)
-                    {
-                        CmdType cmd = CMD_TOGGLE;
-                        osMessageQueuePut(queueCmdHandle, &cmd, 0, 0);
-                        uart_printf("[CMD] send CMD_TOGGLE\r\n");
-                    }
-                    else
-                    {
-                        uart_printf("[CMD] unknown cmd\r\n");
-                    }
-
-                    /* 重置缓冲 */
-                    idx = 0;
-                    memset(buf, 0, sizeof(buf));
-                }
-            }
-            else
-            {
-                if (idx < sizeof(buf) - 1)
-                {
-                    buf[idx++] = (char)ch;
-                }
-                else
-                {
-                    /* 溢出保护：简单粗暴重置 */
-                    idx = 0;
-                    memset(buf, 0, sizeof(buf));
-                    uart_printf("[CMD] buffer overflow, reset.\r\n");
-                }
-            }
-        }
-    }
-}
-
-void StartSensorTask(void *argument)
-{
-//	(void)argument;
-//	uint8_t humi = 0;
-//	uint8_t temp = 0;
-//	HAL_StatusTypeDef res;
-//	
-//	osDelay(2000);   //让系统和DHT11稳定
-//	
-//	for(;;)
-//	{
-//		res = DHT11_Read(&humi, &temp);
-//		
-//		if(res == HAL_OK)
-//		{
-//			uart_printf("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
-//		}
-//		else
-//		{
-//			uart_printf("DHT11 ERROR:read failed\r\n");
-//		}
-//		
-//		/* 遵守 DHT11 最小采样周期（>=1s），这里我们用 2s */
-//		osDelay(2000);
-//	}
-		
-		/*	模拟数据实现		*/
-		 (void)argument;
-    uint8_t humi = 60;   // 模拟湿度值
-    uint8_t temp = 25;   // 模拟温度值
-
-    for (;;)
-    {
-        // 模拟输出温湿度数据
-        uart_printf("DHT11 OK: T=%d C, H=%d %%\r\n", temp, humi);
-
-        // 延时 2s，模拟传感器的读取周期
-        osDelay(2000);
-    }
-}
 
 
 /* USER CODE END Application */

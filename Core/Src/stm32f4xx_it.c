@@ -22,6 +22,14 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
+
+
+#include "cmsis_os.h"
+#include "app_task_key.h"   // 只是为了逻辑归类，不强制
+
+
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,6 +39,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+
+
+/* 跟 KeyTask 里保持一致 */
+#define KEY_EVT_SHORT_PRESS   1u
+
+
 
 /* USER CODE END PD */
 
@@ -42,6 +57,12 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+
+/* 来自 freertos.c 的队列句柄 */
+extern osMessageQueueId_t queueKeyHandle;
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -51,6 +72,28 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == GPIO_PIN_6)   //  PF6
+    {
+        uint8_t evt = KEY_EVT_SHORT_PRESS;
+
+        /* 这里直接调用 CMSIS-OS2 的队列接口在严格意义上是“从 ISR 调用 OS API”，
+         * FreeRTOS + CMSIS-OS2 的适配一般会在内部做 FromISR 处理，
+         * 但如果你后续追求教科书级写法，可以改成：
+         *   - 只在这里置一个 flag，
+         *   - KeyTask 轮询 flag 后再 osMessageQueuePut(...)
+         */
+
+        osMessageQueuePut(queueKeyHandle, &evt, 0, 0);
+        /* 不做阻塞，失败了也只是 miss 一次按键事件 */
+    }
+}
+
+
 
 /* USER CODE END 0 */
 
@@ -158,6 +201,20 @@ void DebugMon_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32f4xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles EXTI line[9:5] interrupts.
+  */
+void EXTI9_5_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI9_5_IRQn 0 */
+
+  /* USER CODE END EXTI9_5_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
+  /* USER CODE BEGIN EXTI9_5_IRQn 1 */
+
+  /* USER CODE END EXTI9_5_IRQn 1 */
+}
 
 /**
   * @brief This function handles TIM6 global interrupt, DAC1 and DAC2 underrun error interrupts.
