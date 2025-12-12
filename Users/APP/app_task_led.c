@@ -4,6 +4,8 @@
 #include "bsp_uart.h"      // uart_printf()
 #include "bsp_led.h"
 #include "main.h"          // HAL_GPIO_* / GPIOG 定义，暂时还没完全 BSP 化
+#include "app_error.h"
+
 
 /* 由 freertos.c 中创建，这里只声明 */
 extern osMessageQueueId_t queueHeartbeatHandle;     // 心跳队列（uint32_t）

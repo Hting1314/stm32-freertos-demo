@@ -5,7 +5,7 @@
 #include "usart.h"         // huart1
 #include <string.h>
 #include <stdio.h>
-
+#include "app_error.h"
 
 /* ============================================================ */
 /* 1. 私有变量定义区 (放在文件顶部)                             */
@@ -151,7 +151,8 @@ void StartCmdTask(void *argument)
                     /* 溢出保护：简单粗暴地重置 */
                     idx = 0;
                     memset(buf, 0, sizeof(buf));
-                    LOG_ERROR("[CMD] Buffer Overflow, Reset.\r\n");
+//                    LOG_ERROR("[CMD] Buffer Overflow, Reset.\r\n");
+										APP_ERR(APP_MOD_QUEUE, APP_E_QUEUE_FULL, 0, "queueCmd put failed");
                 }
             }
         }

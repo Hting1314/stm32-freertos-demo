@@ -3,6 +3,8 @@
 #include "app_types.h"
 #include "bsp_uart.h"   // uart_printf()
 #include "bsp_dht11.h"      // DHT11_Read()，后面可以 BSP 化成 bsp_dht11.h
+#include "app_error.h"
+
 
 extern osMessageQueueId_t queueSensorHandle;
 
@@ -37,7 +39,7 @@ void StartSensorTask(void *argument)
                 }
                 else
                 {
-                    LOG_ERROR("[SENSOR] DHT11 read failed\r\n");
+                    APP_ERR(APP_MOD_SENSOR, APP_E_SENSOR_FAIL, res, "BSP_DHT11_Read failed");
                 }
             }
         }
