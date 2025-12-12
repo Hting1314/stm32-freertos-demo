@@ -26,7 +26,7 @@ void StartLedTask(void *argument)
             {
                 ledEnabled = !ledEnabled;
 
-                uart_printf("[LED] mode changed: %s\r\n",
+                LOG_INFO("[LED] mode changed: %s\r\n",
                             ledEnabled ? "ON" : "OFF");
 
                 if (!ledEnabled)
@@ -46,11 +46,11 @@ void StartLedTask(void *argument)
             if (ledEnabled)
             {
                 BSP_LED_Run_Toggle();
-                uart_printf("[LED] heartbeat=%lu (toggled)\r\n", recvValue);
+                LOG_INFO("[LED] heartbeat=%lu (toggled)\r\n", recvValue);
             }
             else
             {
-                uart_printf("[LED] heartbeat=%lu (ignored, mode OFF)\r\n",
+                LOG_INFO("[LED] heartbeat=%lu (ignored, mode OFF)\r\n",
                             recvValue);
             }
         }

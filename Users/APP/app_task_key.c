@@ -31,7 +31,7 @@ void StartTask_Key(void *argument)
             if (key_evt == KEY_EVT_SHORT_PRESS)
             {
                 press_count++;
-                uart_printf("[KEY] short press #%lu\r\n", press_count);
+                LOG_INFO("[KEY] short press #%lu\r\n", press_count);
 
                 /* 将“按键事件”翻译成高级命令：CMD_TOGGLE
                  * 交给 LED 任务（和 UART 命令公用一条 Cmd 队列）。
@@ -39,16 +39,16 @@ void StartTask_Key(void *argument)
                 CmdType cmd = CMD_TOGGLE;
                 if (osMessageQueuePut(queueCmdHandle, &cmd, 0, 0) == osOK)
                 {
-                    uart_printf("[KEY] send CMD_TOGGLE to LED\r\n");
+                    LOG_INFO("[KEY] send CMD_TOGGLE to LED\r\n");
                 }
                 else
                 {
-                    uart_printf("[KEY] failed to send CMD_TOGGLE\r\n");
+                    LOG_ERROR("[KEY] failed to send CMD_TOGGLE\r\n");
                 }
             }
             else
             {
-                uart_printf("[KEY] unknown event: %u\r\n", key_evt);
+                LOG_ERROR("[KEY] unknown event: %u\r\n", key_evt);
             }
         }
     }

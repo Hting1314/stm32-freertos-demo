@@ -4,11 +4,45 @@
 #include "bsp_uart.h"      // uart_printf()
 #include "usart.h"         // huart1
 #include <string.h>
+#include <stdio.h>
+
+
+/* ============================================================ */
+/* 1. 私有变量定义区 (放在文件顶部)                             */
+/* ============================================================ */
+
+/* 这是一个“乒乓球”，中断接住了就扔进队列，然后准备接下一个 */
+static uint8_t rx_byte_buffer;
+
 
 /* 队列由 freertos.c 创建，这里仅声明 */
 extern osMessageQueueId_t queueHeartbeatHandle;     // 心跳队列（uint32_t）
 extern osMessageQueueId_t queueCmdHandle;  // 命令队列（CmdType）
 extern osMutexId_t uartMutexHandle;  // 声明互斥锁
+extern osMessageQueueId_t queueUartByteHandle;
+
+
+/* ============================================================ */
+/* 2. 中断回调函数 (HAL 库会自动调用这里)                       */
+/* ============================================================ */
+
+/* * 放在这里最安全！CubeMX 不会碰这个文件。
+ * 当 UART1 收到数据产生中断时，HAL 库会查找有没有这个函数，有就执行。
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    /* 过滤：只处理 USART1 的数据 */
+    if (huart->Instance == USART1)
+    {
+        /* A. 把收到的字节塞入队列 
+         * timeout = 0: 中断里不能等待，塞不进去就丢弃（通常队列够大不会丢）
+         */
+        osMessageQueuePut(queueUartByteHandle, &rx_byte_buffer, 0, 0);
+
+        /* B. 【关键】重新开启中断，准备接收下一个字节 */
+        HAL_UART_Receive_IT(&huart1, &rx_byte_buffer, 1);
+    }
+}
 
 
 /* 心跳 / 日志生产者任务 */
@@ -19,7 +53,7 @@ void StartPrintTask(void *argument)
     (void)argument;	
     for (;;)
     {
-        uart_printf("[PRINT] heartbeat=%lu\r\n", heartbeat);
+        LOG_INFO("[PRINT] heartbeat=%lu\r\n", heartbeat);
 
         /* 向队列发送数据（供 LED 任务消费） */
         osMessageQueuePut(queueHeartbeatHandle, &heartbeat, 0, 0);
@@ -31,7 +65,10 @@ void StartPrintTask(void *argument)
 }
 
 
-/* 命令解析任务：阻塞式读 UART，解析 "toggle" 命令 */
+/* ============================================================ */
+/* 3. 任务函数 (StartCmdTask)                                  */
+/* ============================================================ */
+
 void StartCmdTask(void *argument)
 {
 	
@@ -46,8 +83,14 @@ void StartCmdTask(void *argument)
 		/* 清除可能存在的旧错误标志 */
 		__HAL_UART_CLEAR_OREFLAG(&huart1);
 		
-		osDelay(1000);               // 等待系统稳定
-    uart_printf("[CMD] Ready. Please send 'toggle' + Enter.\r\n");
+		/* ------------------------------------------------------- */
+    /* A. 启动中断接收 (推倒第一块多米诺骨牌)                    */
+    /* ------------------------------------------------------- */
+    /* 任务一开始运行，就告诉硬件：“准备好接收，放到 rx_byte_buffer” */
+	
+    HAL_UART_Receive_IT(&huart1, &rx_byte_buffer, 1);
+    
+    LOG_INFO("[CMD] Interrupt Mode Ready.\r\n");
 
     for (;;)
     {
@@ -62,9 +105,13 @@ void StartCmdTask(void *argument)
 			   *  
          */
 			
-        if (HAL_UART_Receive(&huart1, &ch, 1, 2) == HAL_OK)
+				/* --------------------------------------------------- */
+        /* B. 从队列拿数据 (阻塞等待，不占 CPU)——已经改为中断   */
+        /* --------------------------------------------------- */
+			
+        if (osMessageQueueGet(queueUartByteHandle, &ch, NULL, osWaitForever) == osOK)
         {
-						
+						/* C. 拼凑字符串逻辑  */
             if (ch == '\r' || ch == '\n')
             {
 								/* 收到回车换行，说明一句话结束了 */
@@ -73,18 +120,19 @@ void StartCmdTask(void *argument)
                     buf[idx] = '\0';  // 结束字符串
 									
 									/* 此时再打印收到的完整字符串，调试查看 */
-                    uart_printf("[CMD] Recv Frame: [%s]\r\n", buf);
+                    LOG_INFO("[CMD] Recv Frame: [%s]\r\n", buf);
 
                     if (strcmp(buf, "toggle") == 0)
                     {
                         CmdType cmd = CMD_TOGGLE;
+												/* 发送给 LED 任务 */
                         osMessageQueuePut(queueCmdHandle, &cmd, 0, 0);
-											uart_printf("[CMD] Action: LED TOGGLE\r\n");
+												LOG_INFO("[CMD] Action: LED TOGGLE.\r\n");
                     }
-                    else
-                    {
-                        uart_printf("[CMD] Unknown Cmd.\r\n");
-                    }
+//                    else
+//                    {
+//                        uart_printf("[CMD] Unknown Cmd.\r\n");
+//                    }
 
                     /* 重置缓冲区 */
                     idx = 0;
@@ -103,28 +151,28 @@ void StartCmdTask(void *argument)
                     /* 溢出保护：简单粗暴地重置 */
                     idx = 0;
                     memset(buf, 0, sizeof(buf));
-                    uart_printf("[CMD] Buffer Overflow, Reset.\r\n");
+                    LOG_ERROR("[CMD] Buffer Overflow, Reset.\r\n");
                 }
             }
         }
-				else
-				{
-						
-						/* 4. 没收到数据时的处理 */
-            
-            /* 必加：检查并清除 ORE 错误，防止串口死锁 */
-            if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE))
-            {
-                __HAL_UART_CLEAR_OREFLAG(&huart1);
-            }
-						
-					/* === 修改点 2：没收到数据时，让出 CPU ===
-             * 这里非常关键！
-             * osDelay(10) 会让当前任务进入“阻塞”状态 10ms。
-             * 在这 10ms 里，FreeRTOS 调度器会把 CPU 交给 SensorTask 或 LedTask。
-             * 10ms 的轮询间隔对于人类输入来说是感觉不到延迟的。
-             */
-					osDelay(10);
-				}
+//				else
+//				{
+//						
+//						/* 4. 没收到数据时的处理 */
+//            
+//            /* 必加：检查并清除 ORE 错误，防止串口死锁 */
+//            if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_ORE))
+//            {
+//                __HAL_UART_CLEAR_OREFLAG(&huart1);
+//            }
+//						
+//					/* === 修改点 2：没收到数据时，让出 CPU ===
+//             * 这里非常关键！
+//             * osDelay(10) 会让当前任务进入“阻塞”状态 10ms。
+//             * 在这 10ms 里，FreeRTOS 调度器会把 CPU 交给 SensorTask 或 LedTask。
+//             * 10ms 的轮询间隔对于人类输入来说是感觉不到延迟的。
+//             */
+//					osDelay(10);
+//				}
     }
 }

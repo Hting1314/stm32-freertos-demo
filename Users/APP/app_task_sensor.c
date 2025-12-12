@@ -6,7 +6,7 @@
 void StartSensorTask(void *argument)
 {
 	
-		uart_printf("[SENSOR] task start\r\n");
+		LOG_INFO("[SENSOR] task start\r\n");
 	
     (void)argument;
 
@@ -23,11 +23,11 @@ void StartSensorTask(void *argument)
 
         if (res == HAL_OK)
         {
-            uart_printf("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
+            LOG_INFO("DHT11 OK:T = %d C, H = %d %%\r\n", temp, humi);
         }
         else
         {
-            uart_printf("DHT11 ERROR:read failed\r\n");
+            LOG_ERROR("DHT11 ERROR:read failed\r\n");
         }
 
         /* 遵守 DHT11 最小采样周期（>= 1s），这里用 2s 更保险 */

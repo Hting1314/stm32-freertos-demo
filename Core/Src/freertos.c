@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
 #include "task.h"
+#include "main.h"
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -55,98 +56,95 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 
-/* USER CODE END Variables */
-/* Definitions for defaultTask */
-
-
-
-//任务句柄
-osThreadId_t defaultTaskHandle;
+/* ================== 1. 任务句柄 ================== */
 osThreadId_t LedTaskHandle;
 osThreadId_t PrintTaskHandle;
 osThreadId_t CmdTaskHandle;
-osThreadId_t SensorTaskHandle;
 osThreadId_t KeyTaskHandle;
+osThreadId_t SensorTaskHandle;
 
-// 锁句柄
+/* ================== 2. 任务属性 (Stack & Priority) ================== */
+
+/* LED 任务：包含 printf，栈设为 512 */
+const osThreadAttr_t LedTask_attributes = {
+  .name = "LedTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+/* 打印心跳任务：如果不怎么用 printf，256 也够，稳妥起见给 256 */
+const osThreadAttr_t PrintTask_attributes = {
+  .name = "PrintTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+/* 命令任务：包含 printf 且处理字符串，栈设为 512 */
+const osThreadAttr_t CmdTask_attributes = {
+  .name = "CmdTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal, 
+};
+
+/* 传感器任务：【高优先级】保护时序，且包含 printf，栈设为 512 */
+const osThreadAttr_t SensorTask_attributes = {
+  .name = "SensorTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal, // <--- 关键！高于 CmdTask
+};
+
+/* 按键任务 */
+const osThreadAttr_t KeyTask_attributes = {
+  .name = "KeyTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+
+/* ================== 3.队列句柄与属性定义 ================== */
+
+/* 1. 命令队列 (Cmd) */
+osMessageQueueId_t queueCmdHandle;
+const osMessageQueueAttr_t queueCmd_attributes = {
+  .name = "CmdQueue"
+};
+
+/* 2. 心跳队列 (Heartbeat) */
+osMessageQueueId_t queueHeartbeatHandle;
+const osMessageQueueAttr_t queueHeartbeat_attributes = {
+  .name = "HeartbeatQueue"
+};
+
+/* 3. 按键队列 (Key) */
+osMessageQueueId_t queueKeyHandle;
+const osMessageQueueAttr_t queueKey_attributes = {
+  .name = "KeyQueue"
+};
+
+/* 4. 串口字节流队列 (UART Byte) */
+/* 这个队列通常不需要太复杂的属性，但为了统一风格也加上 */
+osMessageQueueId_t queueUartByteHandle;
+const osMessageQueueAttr_t queueUartByte_attributes = {
+  .name = "UartByteQueue"
+};
+
+
+/* ================== 4. 互斥锁句柄 ================== */
 osMutexId_t uartMutexHandle;
 
+/* 定义互斥锁属性 */
+const osMutexAttr_t uartMutex_attributes = {
+	.name = "UartMutex"
+};
 
-
-//队列句柄
-osMessageQueueId_t queueHeartbeatHandle;
-osMessageQueueId_t queueCmdHandle;
-osMessageQueueId_t queueKeyHandle;
-
-
-
-/* 任务属性定义 -------------------------------------------------------------*/
-/* DefaultTask */
+/* USER CODE END Variables */
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-
-/* LedTask */
-const osThreadAttr_t LedTask_attributes = {
-  .name       = "LedTask",
-  .stack_size = 128 * 4,
-  .priority   = (osPriority_t) osPriorityNormal,
-};
-
-/* PrintTask */
-const osThreadAttr_t PrintTask_attributes = {
-  .name       = "PrintTask",
-  .stack_size = 128 * 4,
-  .priority   = (osPriority_t) osPriorityNormal,
-};
-
-/* CmdTask */
-const osThreadAttr_t CmdTask_attributes = {
-  .name       = "CmdTask",
-  .stack_size = 512 * 4,                      // 命令解析稍微给大一点栈
-  .priority   = (osPriority_t) osPriorityNormal,
-};
-
-/* SensorTask */
-const osThreadAttr_t SensorTask_attributes = {
-  .name       = "SensorTask",
-  .stack_size = 512 * 4,
-  .priority   = (osPriority_t) osPriorityBelowNormal,
-};
-
-/* KeyTask */
-const osThreadAttr_t KeyTask_attributes = {
-  .name       = "KeyTask",
-  .stack_size = 128 * 4,
-  .priority   = (osPriority_t) osPriorityNormal,
-};
-
-
-
-/* 队列属性定义 -------------------------------------------------------------*/
-/* 心跳队列：uint32_t，长度 8 */
-const osMessageQueueAttr_t queueHeartbeat_attributes = {
-  .name = "queueHeartbeat"
-};
-
-/* 命令队列：CmdType，长度 4 */
-const osMessageQueueAttr_t queueCmd_attributes = {
-  .name = "queueCmd"
-};
-
-/* 按键事件队列：uint8_t，长度 8 */
-const osMessageQueueAttr_t queueKey_attributes = {
-  .name = "queueKey"
-};
-
-/* 标准互斥锁 （属性定义） */
-const osMutexAttr_t uartMutex_attributes = {
-	.name = "UartMutex"
-};
-
-
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -175,6 +173,25 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
+	
+	/* 1. 创建互斥锁 (最先创建) */
+  uartMutexHandle = osMutexNew(&uartMutex_attributes);
+
+  /* 2. 创建队列 (带属性版本) */
+
+  /* Cmd 队列: 深度 5 (够存几个并发命令), 元素类型 CmdType */
+  queueCmdHandle = osMessageQueueNew(5, sizeof(CmdType), &queueCmd_attributes);
+
+  /* Heartbeat 队列: 深度 8 (您指定的), 元素类型 uint32_t */
+  queueHeartbeatHandle = osMessageQueueNew(8, sizeof(uint32_t), &queueHeartbeat_attributes);
+
+  /* Key 队列: 深度 5, 元素类型 uint8_t */
+  queueKeyHandle = osMessageQueueNew(5, sizeof(uint8_t), &queueKey_attributes);
+
+  /* UART Byte 队列: 深度 128 (作为缓冲池，必须大), 元素类型 uint8_t */
+  queueUartByteHandle = osMessageQueueNew(128, sizeof(uint8_t), &queueUartByte_attributes);
+	
+	
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -191,27 +208,13 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-	
-	
-	
- /* 心跳队列：供 PrintTask 发送 heartbeat，LedTask 消费 */
-  queueHeartbeatHandle = osMessageQueueNew(8, sizeof(uint32_t), &queueHeartbeat_attributes);
-
-  /* 命令队列：供 CmdTask 发送 CmdType，LedTask 消费 */
-  queueCmdHandle = osMessageQueueNew(4, sizeof(CmdType), &queueCmd_attributes);
-	
-	/*  按键事件队列：PF6 EXTI 回调 → KeyTask */
-  queueKeyHandle = osMessageQueueNew(8, sizeof(uint8_t), &queueKey_attributes);
-	
-	// 创建互斥锁
-  uartMutexHandle = osMutexNew(&uartMutex_attributes);
 		
 		
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-//  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
 
