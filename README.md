@@ -27,67 +27,84 @@
 ### 4. 系统整体架构图
 ```mermaid
 graph TD
+    %% =======================
+    %% 1. 中断层 (ISR Layer) - 数据的源头
+    %% =======================
+    subgraph ISR_Layer ["⚡ ISR Layer (中断层)"]
+        direction TB
+        UART_ISR["UART1 ISR<br/>(RxCallback)"]
+        KEY_ISR["EXTI PF6 ISR<br/>(Button Press)"]
+    end
 
-  %% ===== 中断层（ISR） =====
-  subgraph ISR["ISR Layer"]
-    EXTI_PF6["PF6 EXTI ISR"]
-  end
+    %% =======================
+    %% 2. 缓冲层 (Queue Layer) - 数据的管道
+    %% =======================
+    subgraph Queue_Layer ["📥 Queue Layer (缓冲层)"]
+        Q_Byte(("queueUartByte<br/>(Raw Char)"))
+        Q_Cmd(("queueCmd<br/>(CmdType)"))
+        Q_Key(("queueKey<br/>(KeyEvt)"))
+        Q_Heart(("queueHeartbeat<br/>(uint32)"))
+    end
 
-  %% ===== 任务层（Tasks） =====
-  subgraph Tasks["Task Layer"]
-    PrintTask["PrintTask<br/>prio: Normal"]
-    LedTask["LedTask<br/>prio: Normal"]
-    CmdTask["CmdTask<br/>prio: Normal"]
-    KeyTask["KeyTask<br/>prio: Normal"]
-    SensorTask["SensorTask<br/>prio: BelowNormal"]
-  end
+    %% =======================
+    %% 3. 任务层 (Task Layer) - 逻辑处理核心
+    %% =======================
+    subgraph Task_Layer ["⚙️ Task Layer (任务层)"]
+        CmdTask["CmdTask<br/>(Priority: Normal)"]
+        LedTask["LedTask<br/>(Priority: Normal)"]
+        PrintTask["PrintTask<br/>(Priority: Normal)"]
+        SensorTask["SensorTask<br/>(Priority: High)"]
+    end
 
-  %% ===== 资源层（Queues & Hardware） =====
-  subgraph Queues["Queues"]
-    queueHeartbeat["queueHeartbeat<br/>uint32_t"]
-    queueCmd["queueCmd<br/>CmdType"]
-    queueKey["queueKey<br/>uint8_t"]
-    queueSensor["queueSensor<br/>SensorEvt_t"]
-  end
+    %% =======================
+    %% 4. 硬件层 (Hardware) - 执行者
+    %% =======================
+    subgraph HW_Layer ["🔌 Hardware (硬件)"]
+        HW_LED["BSP_LED"]
+        HW_DHT11["BSP_DHT11"]
+        HW_UART["BSP_UART"]
+    end
 
-  subgraph Hardware["Hardware"]
-    BSP_LED["BSP_LED<br/>LED Control"]
-    BSP_UART["BSP_UART<br/>UART Logging"]
-    BSP_DHT11["BSP_DHT11<br/>DHT11 Read"]
-  end
+    %% =======================
+    %% 连线关系 (Data Flow)
+    %% =======================
 
-  %% ===== 数据流连接 =====
+    %% --- 1. 串口数据流 ---
+    UART_ISR -->|"Push 't','o'..."| Q_Byte
+    Q_Byte -->|"Pop Char"| CmdTask
+    CmdTask -- "Parse 'toggle'<br/>Push CMD" --> Q_Cmd
 
-  %% ISR → Queue
-  EXTI_PF6 -- "xQueueSend<br/>KEY_EVT (uint8_t)" --> queueKey
+    %% --- 2. 按键数据流 ---
+    KEY_ISR -->|"Push Press Evt"| Q_Key
+    Q_Key -->|"Pop Evt"| CmdTask
+    %% 注：这里假设按键也可能触发命令，或者有专门的 KeyTask，根据你实际情况调整
 
-  %% Queue → Task
-  queueKey -- "xQueueGet<br/>KEY_EVT (uint8_t)" --> KeyTask
-  queueHeartbeat -- "xQueueGet<br/>heartbeat (uint32_t)" --> LedTask
-  queueCmd -- "xQueueGet<br/>CmdType" --> LedTask
-  queueCmd -- "xQueueGet<br/>CmdType" --> CmdTask
-  queueSensor -- "xQueueGet<br/>SensorEvt_t" --> SensorTask
+    %% --- 3. 命令控制流 ---
+    Q_Cmd -->|"Pop CMD"| LedTask
+    LedTask -->|"Control"| HW_LED
 
-  %% Task → Hardware
-  LedTask -- "BSP_LED_Run_Toggle<br/>BSP_LED_Run_Off" --> BSP_LED
-  CmdTask -- "uart_printf" --> BSP_UART
-  KeyTask -- "BSP_LED_SetMode(mode)" --> BSP_LED
-  SensorTask -- "BSP_DHT11_Read<br/>temperature, humidity" --> BSP_DHT11
-  SensorTask -- "uart_printf" --> BSP_UART
+    %% --- 4. 传感器与心跳 ---
+    PrintTask -- "Push Count" --> Q_Heart
+    Q_Heart -->|"Pop"| LedTask
+    
+    SensorTask -->|"Read Temp/Humi"| HW_DHT11
+    SensorTask -- "Mutex Printf" --> HW_UART
+    CmdTask -- "Mutex Printf" --> HW_UART
+    LedTask -- "Mutex Printf" --> HW_UART
 
-  %% 资源间的连接
-  queueCmd -.->| Give Semaphore | CmdTask
-  queueKey -.->| Give Semaphore | KeyTask
+    %% =======================
+    %% 样式美化
+    %% =======================
+    style ISR_Layer fill:#fff0f0,stroke:#ff0000,stroke-width:2px
+    style Queue_Layer fill:#fffde7,stroke:#fbc02d,stroke-width:2px
+    style Task_Layer fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style HW_Layer fill:#f1f8e9,stroke:#33691e,stroke-width:2px
 
-  %% ===== 样式设置 =====
-  classDef isr fill:#ffcccc,stroke:#ff0000,stroke-width:2px;
-  classDef task fill:#e0f7fa,stroke:#008080,stroke-width:2px;
-  classDef queue fill:#ffffe0,stroke:#c0a000,stroke-width:2px;
-  classDef hardware fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    classDef isrNode fill:#ffcdd2,stroke:#b71c1c,color:black;
+    class UART_ISR,KEY_ISR isrNode;
 
-  %% 关键数据通路加粗显示
-  class queueHeartbeat,queueCmd,queueKey,queueSensor isr;
-  class KeyTask,LedTask,SensorTask,CmdTask isr;
+    classDef qNode fill:#fff9c4,stroke:#f57f17,color:black;
+    class Q_Byte,Q_Cmd,Q_Key,Q_Heart qNode;
   ```
 
 ##  硬件环境

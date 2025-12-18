@@ -76,36 +76,36 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+  HAL_Init();        //硬件复位
 
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
 
   /* Configure the system clock */
-  SystemClock_Config();
+  SystemClock_Config();          //时钟起振
 
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
+  MX_GPIO_Init();                
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 	BSP_LED_Init();
 	BSP_UART_Init();
-	BSP_DHT11_Init();
+	BSP_DHT11_Init();                      //外设就绪
   /* USER CODE END 2 */
 
   /* Init scheduler */
-  osKernelInitialize();
+  osKernelInitialize();                  //RTOS内核准备
 
   /* Call init function for freertos objects (in cmsis_os2.c) */
-  MX_FREERTOS_Init();
+  MX_FREERTOS_Init();                   //创建任务、队列、信号量
 
   /* Start scheduler */
-  osKernelStart();
+  osKernelStart();                     //启动调度器，main 函数在此“结束”，控制权交给 RTOS
 
   /* We should never get here as control is now taken by the scheduler */
 

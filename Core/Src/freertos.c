@@ -144,12 +144,6 @@ const osMutexAttr_t uartMutex_attributes = {
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
 
 /* ================== 5. 定时器句柄+属性  ================== */
 osTimerId_t sensorTimerHandle;
@@ -182,7 +176,6 @@ static void SensorTimerCallback(void *argument)
 
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -266,7 +259,7 @@ if (sensorTimerHandle != NULL)
   SensorTaskHandle = osThreadNew(StartSensorTask, NULL, &SensorTask_attributes);
 	
   /* Key 任务：从某个队列拿“模式变化” */
-  KeyTaskHandle = osThreadNew(StartTask_Key, NULL, &KeyTask_attributes);
+  KeyTaskHandle = osThreadNew(StartKeyTask, NULL, &KeyTask_attributes);
 	
 
 	
